@@ -230,9 +230,41 @@ int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, soc
 		}else if (strcmp(op, "DWN")==0) {
 
 		}else if (strcmp(op, "DST")==0) {
+			memset(board, '\0', 30);
+			getStringUDP(udpsockfd, board, 30);
+			printf("in DST\n");
+			char boardPath[strlen(board)+10];
+			memset(boardPath, '\0', sizeof boardPath);
+			strcpy(boardPath, "boards/");
+			strcat (boardPath, board);
+			char * tempUser = malloc (20 * sizeof(char));
+			if (fileExists(boardPath)==0) {
+				printf("sent code -2\n");
+				sendCodeUDP(-2, udpsockfd, src_addr, src_addr_len);
+				continue;
 
+			}
+			int fd = open (boardPath, O_RDONLY, 0);
+
+			read_line(fd, tempUser);
+			close(fd);
+
+
+			if (strcmp(username, tempUser)==0) {
+				char tempCommand[strlen(boardPath) + 5];
+				memset(tempCommand, '\0', sizeof tempCommand);
+				sprintf(tempCommand, "rm %s", boardPath);
+				system(tempCommand);
+				//sent success code
+
+				sendCodeUDP(1, udpsockfd, src_addr, src_addr_len);
+			}
+			else {// not the same user!
+				printf("sent code -1\n");
+				sendCodeUDP(-1, udpsockfd, src_addr, src_addr_len);
+			}
+			free(tempUser);
 		}else if (strcmp(op, "XIT")==0) {
-
 			return 1;
 		}else if (strcmp(op, "SHT")==0) {
 			close(tcpsockfd);
@@ -468,7 +500,7 @@ int deleteLine(char* board, int line) {
 
 	close(fd2);
 	fixLines(board); //replaces the line handles on hte end
-	
+
 	return 1;
 }
 
