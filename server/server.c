@@ -390,6 +390,7 @@ void deleteLine(char* board, int line) {
 	strcat(tempCommand, board);
 	strcat(tempCommand, " .temp_board");
 
+	int found = 0; // so we know if we found the line o rnot
 	printf("in dlt\n");
 	read_line(fd, block);
 	int line_track =0;
@@ -399,14 +400,33 @@ void deleteLine(char* board, int line) {
 		printf("in the loop in del\n");
 		if (brea==0)
 			break;
-		if (extractLineNum(block)==line) break; // we've found the line
+		if (extractLineNum(block)==line) {
+			found = 1;
+			break; // we've found the line
+		}
 	}
+	if (found == 0) {
+		printf("not found!\n");
+	}
+
+	int fd_temp = open(".temp_board",O_RDONLY, 0);
+	int i =0;
+	while (1) {
+		int brea = read_line(fd_temp, block);
+		if (brea==0) break;
+		if (i==line_track) printf("the line to delete is %s\n", block);
+
+	}
+	close(fd_temp);
+	close (fd);
+
+
 
 	printf("it is on line: %d\n", line_track);
 	memset(tempCommand, '\0', strlen(tempCommand));
 	strcpy(tempCommand, "rm .temp_board");
 	free  (tempCommand);
-	close (fd);
+
 
 }
 
@@ -414,7 +434,6 @@ void deleteLine(char* board, int line) {
 int extractLineNum(char* line) {
 	// parse until (, then we want everything after
 	int i;
-	printf("extractline1\n");
 	char newStr[5]; // where we will store the number
   for (i=0; i<strlen(line); i++) {
           if (line[i] == '(') break;
@@ -422,12 +441,10 @@ int extractLineNum(char* line) {
 
 
   int spot = i+1;
-	printf("extractline2  %lu     %d    %s\n", strlen(line), spot, line);
   for (i=0; i<strlen(line)- spot; i++) {
           if (line[i+spot] == ')') break;
           newStr[i] = line[i+spot];
   }
-	printf("extractline3\n");
   newStr[i] = '\0';
 	return atoi(newStr);
 }
