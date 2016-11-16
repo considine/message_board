@@ -8,7 +8,7 @@ int set_socket(char* arg, int, struct addrinfo **p);
 int read_line(int fd, char* block);
 int check_users(int fd, char * req_user);
 int check_pass(int, int, char *);
-int client_loop (char * arg1, int udpfd, int tcpfd);
+int client_loop (int udpfd, int tcpfd);
 int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, socklen_t src_addr_len, char* username);
 int sign_in();
 
@@ -21,18 +21,24 @@ int main (int argc, char *argv[]) {
 	}
 	struct addrinfo *p;
 	int udpfd = set_socket(argv[1], 1, &p);
-	int tcpfd = set_socket(arg1, 0, &p);
+	int tcpfd = set_socket(argv[1], 0, &p);
 
 	int cont = 1;
 	while (cont == 1) {
-		cont = client_loop(argv[1], udpfd, tcpfd);
+		// listen for connection
+
+    struct sockaddr_storage client_address;
+    socklen_t sin_size = sizeof client_address;
+    tcpfd = accept(tcpfd, (struct sockaddr *)&client_address, &sin_size);
+
+		cont = client_loop(udpfd, tcpfd);
 	}
 
 	return 0;
 }
 
 
-int client_loop (char * arg1, int udpfd, int tcpfd) {
+int client_loop (int udpfd, int tcpfd) {
 
 	//int tcpfd = 1;
 
@@ -67,6 +73,7 @@ int client_loop (char * arg1, int udpfd, int tcpfd) {
 		fd = open(".user_file", O_RDONLY, 0);
 		int userexist=check_users(fd, username);
 		char password[40];
+		memset(password, '\0', sizeof password);
 		if (userexist!=0) {
 			// check password
 			// tell client this user exists
@@ -160,7 +167,7 @@ int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, soc
 		}else if (strcmp(op, "DST")==0) {
 
 		}else if (strcmp(op, "XIT")==0) {
-			close(tcpsockfd);
+
 			return 1;
 		}else if (strcmp(op, "SHT")==0) {
 			close(tcpsockfd);
@@ -293,15 +300,13 @@ int set_socket(char* arg, int tcp, struct addrinfo **p_ptr) { // tcp = 0, udp = 
 	*p_ptr = p;
         freeaddrinfo(servinfo);
 	printf("waiting for connections\n");
-	if (tcp==1) {
+	if (tcp==1)
 		return sockfd;
-	}
 	if (listen(sockfd, BACKLOG) == -1) {
-                perror ("listen");
-                exit(1);
-        }
-        struct sockaddr_storage client_address;
-        socklen_t sin_size = sizeof client_address;
-        sockfd = accept(sockfd, (struct sockaddr *)&client_address, &sin_size);
+		perror ("listen");
+		exit(1);
+	}
 	return sockfd;
+
+
 }
