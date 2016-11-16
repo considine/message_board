@@ -7,11 +7,13 @@
 int set_socket(char* arg, int, struct addrinfo **p);
 int read_line(int fd, char* block);
 int get_lines(char* filename);
-void deleteLine(char* board, int line);
+int deleteLine(char* board, int line);
 int check_users(int fd, char * req_user);
 int check_pass(int, int, char *);
 int client_loop (int udpfd, int tcpfd);
 int extractLineNum(char* line);
+void fixLines(char* filename);
+void fixParens (char* block, int line);
 int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, socklen_t src_addr_len, char* username);
 int sign_in();
 void appendLineNumber(char* message, int linenumber);
@@ -257,7 +259,6 @@ int check_users(int fd, char* req_user) {
 	while (1) {
 	if ((i%2)==0) {
 		int brea= read_line(fd, username);
-		printf("userline is %s\n", username);
 		if (brea==0)
 			break;
 		if (strcmp(username, req_user)==0) {
@@ -380,15 +381,17 @@ void appendLineNumber(char* message, int lines) {
 }
 
 
-void deleteLine(char* board, int line) {
+int deleteLine(char* board, int line) {
 	//first maek temp file of same naem
 
 	int fd = open(board, O_RDONLY, 0);
 	char * block = malloc(50 * sizeof(char));
-	char * tempCommand = malloc (10 * sizeof(char) + strlen(board) * sizeof(char));
+	char * tempCommand = malloc (30 * sizeof(char) + strlen(board) * sizeof(char));
 	strcpy(tempCommand, "cp ");
 	strcat(tempCommand, board);
 	strcat(tempCommand, " .temp_board");
+
+	system(tempCommand);
 
 	int found = 0; // so we know if we found the line o rnot
 	printf("in dlt\n");
@@ -397,7 +400,6 @@ void deleteLine(char* board, int line) {
 	while (1) {
 		line_track++;
 		int brea= read_line(fd, block);
-		printf("in the loop in del\n");
 		if (brea==0)
 			break;
 		if (extractLineNum(block)==line) {
@@ -406,28 +408,46 @@ void deleteLine(char* board, int line) {
 		}
 	}
 	if (found == 0) {
-		printf("not found!\n");
-	}
-
-	int fd_temp = open(".temp_board",O_RDONLY, 0);
-	int i =0;
-	while (1) {
-		int brea = read_line(fd_temp, block);
-		if (brea==0) break;
-		if (i==line_track) printf("the line to delete is %s\n", block);
+		//todo send message
 
 	}
-	close(fd_temp);
+
+
+
+	//remove file... we will be rewriting to it
+	memset(tempCommand, '\0', strlen(tempCommand));
+	strcpy(tempCommand, "rm ");
+	strcat(tempCommand, board);
+	system(tempCommand); // remove the board;
 	close (fd);
+	int fd2 = open(".temp_board", O_RDONLY, 0);
 
+	int cLine = 0;
+	while (1) {
+		int brea = read_line(fd2, block);
+		if (brea==0) break;
 
+		// set tempcommand
+		if (cLine != line_track)  {
+			memset(tempCommand, '\0', strlen(tempCommand));
+			strcpy(tempCommand, "echo '");
+			strcat(tempCommand, block);
+			strcat(tempCommand, "' >> ");
+			strcat(tempCommand, board);
+			system(tempCommand);
+		}
+		cLine++;
 
-	printf("it is on line: %d\n", line_track);
+	}
+
 	memset(tempCommand, '\0', strlen(tempCommand));
 	strcpy(tempCommand, "rm .temp_board");
-	free  (tempCommand);
+	system(tempCommand);
+	free  (tempCommand); free(block);
 
-
+	close(fd2);
+	fixLines(board);
+	return 3;
 }
 
 
@@ -447,4 +467,49 @@ int extractLineNum(char* line) {
   }
   newStr[i] = '\0';
 	return atoi(newStr);
+}
+
+// this function makes sure the handle of each line stays up to date
+void fixLines(char* filename) {
+	int fd_t = open(".temp_block", O_RDONLY, 0);
+	close(fd_t);
+
+	int fd = open(filename, O_RDONLY, 0);
+	char * block = malloc(50 * sizeof(char));
+	int brea = read_line(fd, block); // once to get rid of username:
+	int line = 1;
+	while (1) {
+		brea = read_line(fd, block);
+		if (brea==0) break;
+		printf("before fix: %s\n", block);
+		fixParens(block, line);
+		printf("fix lines: %s\n", block);
+		line ++;
+	}
+	close (fd);
+
+}
+
+// for actually logic behind editing number in parens at end of each line
+void fixParens (char* block, int line) {
+				int i;
+        for (i=0; i<strlen(block); i++) {
+                if (block[i] == '(') break;
+								// if (block[i] == '\n') {
+								// 	printf("new\n");
+								// 	i--;
+								// 	break;}
+        }
+        i++;
+        char line_s[5];
+        sprintf(line_s, "%d", line);
+				int j;
+        for (j=0; j<strlen(line_s); j++) {
+                block[i+j] = line_s[j];
+        }
+				j--;
+
+				printf("line_s[j] is %d    %lu\n", j, strlen(line_s));
+        block[i+j+1] = ')';
+        block[i+j+2] = '\0';
 }
