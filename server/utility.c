@@ -297,3 +297,8 @@ void removeFilename (char *path) {
 
 
 }
+void readString(char* string_to_read, int max_size) {
+  memset(string_to_read, '\0', max_size);
+  fgets(string_to_read, max_size, stdin);
+  string_to_read[strcspn(string_to_read, "\n")] = 0;
+}

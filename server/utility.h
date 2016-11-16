@@ -34,3 +34,4 @@ void sendCodeUDP (int code, int sockfd, struct sockaddr_storage* src_addr, sockl
 int getCodeUDP(int sockfd);
 void sendStringUDP (char* string, int udpsockfd, struct sockaddr_storage* src_addr, socklen_t src_addr_len);
 void getStringUDP (int udpsockfd, char* string,  int maxlen);
+void readString(char* string_to_read, int max_size);

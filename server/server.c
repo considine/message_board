@@ -6,11 +6,16 @@
 #include "utility.h"
 int set_socket(char* arg, int, struct addrinfo **p);
 int read_line(int fd, char* block);
+int get_lines(char* filename);
+void deleteLine(char* board, int line);
 int check_users(int fd, char * req_user);
 int check_pass(int, int, char *);
 int client_loop (int udpfd, int tcpfd);
+int extractLineNum(char* line);
 int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, socklen_t src_addr_len, char* username);
 int sign_in();
+void appendLineNumber(char* message, int linenumber);
+
 
 
 
@@ -96,7 +101,7 @@ int client_loop (int udpfd, int tcpfd) {
 			getStringUDP(udpfd, password, 40);
 			printf("password is %s\n", password);
 			//concatenate to the account
-			char tempCommand[20 + strlen(username) + strlen(password)];
+			char tempCommand[40 + strlen(username) + strlen(password)];
 			strcpy(tempCommand, "echo ");
 			strcat(tempCommand, username);
 			strcat(tempCommand, " >> ");
@@ -126,11 +131,13 @@ int client_loop (int udpfd, int tcpfd) {
 
 int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, socklen_t src_addr_len, char* username) {
 	char op[10];
+	char message[50];
+	char board[30];
 	while (1) {
 		memset(op, '\0', sizeof op);
 		getStringUDP(udpsockfd, op, 5);
 		if (strcmp(op, "CRT")==0) {
-			char board[30];
+			memset(board, '\0', 30);
 			getStringUDP(udpsockfd, board, 30);
 			printf("the board is %s\n", board);
 
@@ -155,8 +162,50 @@ int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, soc
 		else if (strcmp(op, "LIS")==0) {
 
 		}else if (strcmp(op, "MSG")==0) {
+				//get board name
+				memset(board, '\0', 30);
+				getStringUDP(udpsockfd, board, 30);
+				char boardPath[strlen(board)+10];
+				memset(boardPath, '\0', sizeof boardPath);
+				strcpy(boardPath, "boards/");
+				strcat (boardPath, board);
+				memset(message, '\0', sizeof message);
+				getStringUDP(udpsockfd, message, 50);
+				if (fileExists(boardPath)==1) {
+					// printf("such board, and the message is %s\n", message);
+					//get lines in board
+					int lines = get_lines(boardPath);
+					printf("there are %d lines\n", lines);
+					char tempCommand[strlen(boardPath) + strlen(message) + 15];
+					appendLineNumber(message, lines);
+
+					memset(tempCommand, '\0', sizeof tempCommand);
+					strcpy(tempCommand, "echo '");
+					strcat(tempCommand, message);
+					strcat(tempCommand, "' >> ");
+					strcat(tempCommand, boardPath);
+					int res = system(tempCommand);
+					sendCodeUDP(res, udpsockfd, src_addr, src_addr_len);
+				}
+				else {
+					// does not exists
+					sendCodeUDP(-1, udpsockfd, src_addr, src_addr_len);
+				}
+				// see if it exists
 
 		}else if (strcmp(op, "DLT")==0) {
+			//get board name
+			memset(board, '\0', 30);
+			getStringUDP(udpsockfd, board, 30);
+
+			char boardPath[strlen(board)+10];
+			memset(boardPath, '\0', sizeof boardPath);
+			strcpy(boardPath, "boards/");
+			strcat (boardPath, board);
+			//getLine to deleteLine
+			int line = getCodeUDP(udpsockfd);
+			printf("the line to delete is %d\n", line);
+			deleteLine(boardPath, line);
 
 		}else if (strcmp(op, "RDB")==0) {
 
@@ -231,6 +280,16 @@ int check_users(int fd, char* req_user) {
 	return 0;
 }
 
+int get_lines(char* filename) {
+	int fd = open(filename, O_RDONLY, 0);
+	int line_ct;
+	char throwawayBlock[40];
+	while (read_line(fd, throwawayBlock)!=0)
+		line_ct++;
+	return line_ct;
+	close(fd);
+}
+
 int read_line(int fd, char* block) {
 	memset(block, '\0', strlen(block));
 	int readInt; // assigns number of characters read from a file
@@ -246,7 +305,7 @@ int read_line(int fd, char* block) {
 		}
 		strcat(block, buffer);
 	}
-	printf("line is %s\n", block);
+
 
 }
 
@@ -268,35 +327,35 @@ int set_socket(char* arg, int tcp, struct addrinfo **p_ptr) { // tcp = 0, udp = 
 	else
 		return -1; // some sort of error
 	hints.ai_flags = AI_PASSIVE;
-        int rv;
+  int rv;
 
-        if ((rv = getaddrinfo(NULL, arg, &hints, &servinfo)) != 0) {
-                fprintf(stderr, "Error setting structs for socket info\n");
-        }
+  if ((rv = getaddrinfo(NULL, arg, &hints, &servinfo)) != 0) {
+          fprintf(stderr, "Error setting structs for socket info\n");
+  }
 
-        for (p=servinfo; p!=NULL; p=p->ai_next) {
-                if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol))== -1) {
-                        perror ("error creating socket\n");
-                        continue;
-                }
-                //make the port reusable
-                if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int))==-1) {
-                        perror ("setsockopt");
-                        exit(1);
-                }
-                // bind the socket
-                if (bind(sockfd, p->ai_addr, p->ai_addrlen)==-1) {
-                        close(sockfd);
-												printf(" we are using %d\n", tcp);
-                        perror("error binding to socket");
-                        continue;
-                }
-                break;
-        }
-        if (p==NULL) {
-                fprintf(stderr, "Failed to bind to the socket\n");
-                exit(1);
-        }
+  for (p=servinfo; p!=NULL; p=p->ai_next) {
+    if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol))== -1) {
+            perror ("error creating socket\n");
+            continue;
+    }
+    //make the port reusable
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int))==-1) {
+            perror ("setsockopt");
+            exit(1);
+    }
+    // bind the socket
+    if (bind(sockfd, p->ai_addr, p->ai_addrlen)==-1) {
+            close(sockfd);
+						printf(" we are using %d\n", tcp);
+            perror("error binding to socket");
+            continue;
+    }
+    break;
+  }
+  if (p==NULL) {
+          fprintf(stderr, "Failed to bind to the socket\n");
+          exit(1);
+  }
 	*p_ptr = p;
         freeaddrinfo(servinfo);
 	printf("waiting for connections\n");
@@ -309,4 +368,66 @@ int set_socket(char* arg, int tcp, struct addrinfo **p_ptr) { // tcp = 0, udp = 
 	return sockfd;
 
 
+}
+
+void appendLineNumber(char* message, int lines) {
+	char * tempMessage = malloc (strlen(message)*sizeof(char) + 5 *sizeof(char));
+	strcpy(tempMessage, message);
+	sprintf(tempMessage, "%s (%d)", message, lines);
+	memset(message, '\0', strlen(message));
+	strcpy(message, tempMessage);
+	free(tempMessage);
+}
+
+
+void deleteLine(char* board, int line) {
+	//first maek temp file of same naem
+
+	int fd = open(board, O_RDONLY, 0);
+	char * block = malloc(50 * sizeof(char));
+	char * tempCommand = malloc (10 * sizeof(char) + strlen(board) * sizeof(char));
+	strcpy(tempCommand, "cp ");
+	strcat(tempCommand, board);
+	strcat(tempCommand, " .temp_board");
+
+	printf("in dlt\n");
+	read_line(fd, block);
+	int line_track =0;
+	while (1) {
+		line_track++;
+		int brea= read_line(fd, block);
+		printf("in the loop in del\n");
+		if (brea==0)
+			break;
+		if (extractLineNum(block)==line) break; // we've found the line
+	}
+
+	printf("it is on line: %d\n", line_track);
+	memset(tempCommand, '\0', strlen(tempCommand));
+	strcpy(tempCommand, "rm .temp_board");
+	free  (tempCommand);
+	close (fd);
+
+}
+
+
+int extractLineNum(char* line) {
+	// parse until (, then we want everything after
+	int i;
+	printf("extractline1\n");
+	char newStr[5]; // where we will store the number
+  for (i=0; i<strlen(line); i++) {
+          if (line[i] == '(') break;
+  }
+
+
+  int spot = i+1;
+	printf("extractline2  %lu     %d    %s\n", strlen(line), spot, line);
+  for (i=0; i<strlen(line)- spot; i++) {
+          if (line[i+spot] == ')') break;
+          newStr[i] = line[i+spot];
+  }
+	printf("extractline3\n");
+  newStr[i] = '\0';
+	return atoi(newStr);
 }
