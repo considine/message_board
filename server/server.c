@@ -214,7 +214,14 @@ int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, soc
 			//getLine to deleteLine
 			int line = getCodeUDP(udpsockfd);
 			printf("the line to delete is %d\n", line);
-			deleteLine(boardPath, line);
+			int res = deleteLine(boardPath, line);
+			if (res < 0)  {
+				sendCodeUDP(-1, udpsockfd, src_addr, src_addr_len);
+				continue;
+			}// the linde doesnt exist
+			else {
+				sendCodeUDP(1, udpsockfd, src_addr, src_addr_len);
+			}
 
 		}else if (strcmp(op, "RDB")==0) {
 
@@ -390,7 +397,11 @@ void appendLineNumber(char* message, int lines) {
 
 int deleteLine(char* board, int line) {
 	//first maek temp file of same naem
-
+	// get lines of board
+	int total_lines = get_lines(board);
+	if (line > total_lines) {
+		return -1;
+	}
 	int fd = open(board, O_RDONLY, 0);
 	char * block = malloc(50 * sizeof(char));
 	char * tempCommand = malloc (30 * sizeof(char) + strlen(board) * sizeof(char));
@@ -401,23 +412,23 @@ int deleteLine(char* board, int line) {
 	system(tempCommand);
 
 	int found = 0; // so we know if we found the line o rnot
-	printf("in dlt\n");
-	read_line(fd, block);
-	int line_track =0;
-	while (1) {
-		line_track++;
-		int brea= read_line(fd, block);
-		if (brea==0)
-			break;
-		if (extractLineNum(block)==line) {
-			found = 1;
-			break; // we've found the line
-		}
-	}
-	if (found == 0) {
-		//todo send message
 
-	}
+	read_line(fd, block);
+	// int line_track =0;
+	// while (1) {
+	// 	line_track++;
+	// 	int brea= read_line(fd, block);
+	// 	if (brea==0)
+	// 		break;
+	// 	if (extractLineNum(block)==line) {
+	// 		found = 1;
+	// 		break; // we've found the line
+	// 	}
+	// }
+	// if (found == 0) {
+	// 	//todo send message
+	//
+	// }
 
 
 
@@ -435,17 +446,20 @@ int deleteLine(char* board, int line) {
 		if (brea==0) break;
 
 		// set tempcommand
-		if (cLine != line_track)  {
+		if (cLine != line)  {
 			memset(tempCommand, '\0', strlen(tempCommand));
 			strcpy(tempCommand, "echo '");
 			strcat(tempCommand, block);
 			strcat(tempCommand, "' >> ");
 			strcat(tempCommand, board);
+
 			system(tempCommand);
 		}
+
 		cLine++;
 
 	}
+
 
 	memset(tempCommand, '\0', strlen(tempCommand));
 	strcpy(tempCommand, "rm .temp_board");
@@ -454,7 +468,8 @@ int deleteLine(char* board, int line) {
 
 	close(fd2);
 	fixLines(board); //replaces the line handles on hte end
-	return 3;
+	
+	return 1;
 }
 
 
@@ -478,28 +493,23 @@ int extractLineNum(char* line) {
 
 // this function makes sure the handle of each line stays up to date
 void fixLines(char* filename) {
-
 	// cp file into temp file first:
 	char * command = malloc(50 * sizeof(char) + 25*sizeof(char));
 	memset(command, '\0', 50+25);
 	sprintf(command, "cp %s .temp_block", filename);
 	system(command);
-
-
 	memset(command, '\0', 50+25);
 	sprintf(command, "rm %s", filename); // so we can write back out to this file!
 	system(command);
-
-
-
 	int fd_t = open(".temp_block", O_RDONLY, 0);
-
-
 	// int fd = open(filename, O_RDONLY, 0);
 	// close (fd);
 	char * block = malloc(50 * sizeof(char));
-
 	int brea = read_line(fd_t, block); // once to get rid of username:
+	memset(command, '\0', 50+25);
+	sprintf(command, "echo '%s' >> %s", block, filename);
+	system(command);
+
 	int line = 1;
 	while (1) {
 		brea = read_line(fd_t, block);
@@ -509,7 +519,6 @@ void fixLines(char* filename) {
 		memset(command, '\0', 50+25);
 		sprintf(command, "echo '%s' >> %s", block, filename);
 		system(command);
-
 		// printf("the block is now: %s\n", block);
 		// printf("fix lines: %s\n", block);
 		line ++;
@@ -517,11 +526,8 @@ void fixLines(char* filename) {
 	memset(command, '\0', 50+25);
 	strcpy(command, "rm .temp_block");
 	system(command);
-
-
 	free (command);
 	close(fd_t);
-
 }
 
 // for actually logic behind editing number in parens at end of each line
