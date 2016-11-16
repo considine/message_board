@@ -204,6 +204,13 @@ int op_loop(int tcpsockfd, int udpsockfd, struct sockaddr_storage* src_addr, soc
 			memset(boardPath, '\0', sizeof boardPath);
 			strcpy(boardPath, "boards/");
 			strcat (boardPath, board);
+			if (fileExists(boardPath)==1) {
+				sendCodeUDP(1, udpsockfd, src_addr, src_addr_len);
+			}
+			else {
+				sendCodeUDP(-1, udpsockfd, src_addr, src_addr_len);
+				continue;
+			}
 			//getLine to deleteLine
 			int line = getCodeUDP(udpsockfd);
 			printf("the line to delete is %d\n", line);
