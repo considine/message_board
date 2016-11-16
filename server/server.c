@@ -453,7 +453,7 @@ int deleteLine(char* board, int line) {
 	free  (tempCommand); free(block);
 
 	close(fd2);
-	fixLines(board);
+	fixLines(board); //replaces the line handles on hte end
 	return 3;
 }
 
@@ -478,22 +478,49 @@ int extractLineNum(char* line) {
 
 // this function makes sure the handle of each line stays up to date
 void fixLines(char* filename) {
-	int fd_t = open(".temp_block", O_RDONLY, 0);
-	close(fd_t);
 
-	int fd = open(filename, O_RDONLY, 0);
+	// cp file into temp file first:
+	char * command = malloc(50 * sizeof(char) + 25*sizeof(char));
+	memset(command, '\0', 50+25);
+	sprintf(command, "cp %s .temp_block", filename);
+	system(command);
+
+
+	memset(command, '\0', 50+25);
+	sprintf(command, "rm %s", filename); // so we can write back out to this file!
+	system(command);
+
+
+
+	int fd_t = open(".temp_block", O_RDONLY, 0);
+
+
+	// int fd = open(filename, O_RDONLY, 0);
+	// close (fd);
 	char * block = malloc(50 * sizeof(char));
-	int brea = read_line(fd, block); // once to get rid of username:
+
+	int brea = read_line(fd_t, block); // once to get rid of username:
 	int line = 1;
 	while (1) {
-		brea = read_line(fd, block);
+		brea = read_line(fd_t, block);
 		if (brea==0) break;
-		printf("before fix: %s\n", block);
+		// printf("before fix: %s\n", block);
 		fixParens(block, line);
-		printf("fix lines: %s\n", block);
+		memset(command, '\0', 50+25);
+		sprintf(command, "echo '%s' >> %s", block, filename);
+		system(command);
+
+		// printf("the block is now: %s\n", block);
+		// printf("fix lines: %s\n", block);
 		line ++;
 	}
-	close (fd);
+	memset(command, '\0', 50+25);
+	strcpy(command, "rm .temp_block");
+	system(command);
+
+
+	free (command);
+	close(fd_t);
 
 }
 
@@ -515,8 +542,6 @@ void fixParens (char* block, int line) {
                 block[i+j] = line_s[j];
         }
 				j--;
-
-				printf("line_s[j] is %d    %lu\n", j, strlen(line_s));
         block[i+j+1] = ')';
         block[i+j+2] = '\0';
 }
